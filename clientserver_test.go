@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/useflyent/fhttp"
-	"github.com/useflyent/fhttp/httptest"
-	"github.com/useflyent/fhttp/httputil"
+	. "github.com/Samy-ib/fhttp"
+	"github.com/Samy-ib/fhttp/httptest"
+	"github.com/Samy-ib/fhttp/httputil"
 )
 
 type clientServerTest struct {
