@@ -717,6 +717,166 @@ func (t *Transport) expectContinueTimeout() time.Duration {
 
 // Applies akamai fimgerprints to the request
 func (t *Transport) ApplyFingerprints(fingerprints string) error {
+	split := strings.Split(fingerprints, "|")
+	if len(split) != 4 {
+		return fmt.Errorf("invalid Fimgerprints : %s, invalid length : expected 4, got %d", fingerprints, len(split))
+	}
+
+	var (
+		settings      = split[0]
+		windowUpdate  = split[1]
+		priorities    = split[2]
+		pseudoHeaders = split[3]
+	)
+
+	if err := t.ApplySettings(settings); err != nil {
+		return err
+	}
+	if err := t.ApplyWindowUpdate(windowUpdate); err != nil {
+		return err
+	}
+	if err := t.ApplyPriorities(priorities); err != nil {
+		return err
+	}
+	if err := t.ApplyPseudoHeaders(pseudoHeaders); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *Transport) ApplySettings(settings string) error {
+	if settings != "0" {
+		values := strings.Split(settings, ",")
+
+		settingsFrame := make(map[SettingID]uint32, len(values))
+
+		var (
+			id, val uint64
+			err     error
+		)
+
+		for i, setting := range values {
+			s2 := strings.Split(setting, ":")
+			if len(s2) != 2 {
+				return fmt.Errorf("invalid SETTINGS : index %d (invalid %s)", i, "length")
+			}
+
+			id, err = strconv.ParseUint(s2[0], 10, 16)
+			if err != nil {
+				return fmt.Errorf("invalid SETTINGS : index %d (invalid %s)", i, "id")
+			}
+
+			val, err = strconv.ParseUint(s2[1], 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid SETTINGS : index %d (invalid %s)", i, "value")
+			}
+
+			settingsFrame[SettingID(id)] = uint32(val)
+
+			t.Settings = settingsFrame
+			t.SettingsOrder = append(t.SettingsOrder, SettingID(id))
+		}
+	} else {
+		t.Settings = make(map[SettingID]uint32)
+	}
+
+	return nil
+}
+
+func (t *Transport) ApplyWindowUpdate(windowUpdate string) error {
+	if windowUpdate == "0" {
+		t.WindowUpdate = (2 << 15) - 1
+	} else {
+		if ws, err := strconv.Atoi(windowUpdate); err != nil {
+			return fmt.Errorf("invalid WINDOW_UPDATE : %s", windowUpdate)
+		} else {
+			t.WindowUpdate = uint32(ws)
+		}
+	}
+
+	return nil
+}
+
+func (t *Transport) ApplyPriorities(priorities string) error {
+	if priorities != "0" {
+		rawPriorities := strings.Split(priorities, ",")
+		streamPriorities := make([]Priority, 0, len(rawPriorities))
+
+		var (
+			id, deps, weight int
+			exclusive        bool
+			err              error
+		)
+
+		for _, priority := range rawPriorities {
+			s2 := strings.Split(priority, ":")
+			if len(s2) != 4 {
+				return fmt.Errorf("invalid PRIORITY : %s", priority)
+			}
+
+			id, err = strconv.Atoi(s2[0])
+			if err != nil {
+				return fmt.Errorf("invalid PRIORITY : %s", priority)
+			}
+
+			if s2[1] != "0" && s2[1] != "1" {
+				return fmt.Errorf("invalid PRIORITY : %s", priority)
+			}
+			exclusive = s2[1] == "1"
+
+			deps, err = strconv.Atoi(s2[2])
+			if err != nil {
+				return fmt.Errorf("invalid PRIORITY : %s", priority)
+			}
+
+			weight, err = strconv.Atoi(s2[3])
+			if err != nil {
+				return fmt.Errorf("invalid PRIORITY : %s", priority)
+			}
+
+			streamPriorities = append(streamPriorities, Priority{
+				StreamID: uint32(id),
+				PriorityParam: PriorityParam{
+					Weight:    uint8(weight - 1),
+					Exclusive: exclusive,
+					StreamDep: uint32(deps),
+				},
+			})
+		}
+
+		t.Priorities = streamPriorities
+
+	} else {
+		t.Priorities = make([]Priority, 0)
+	}
+
+	return nil
+}
+
+func (t *Transport) ApplyPseudoHeaders(pseudoHeaders string) error {
+	if pseudoHeaders != "0" {
+		headers := strings.Split(pseudoHeaders, ",")
+		if len(headers) != 4 {
+			return fmt.Errorf("invalid PSEUDO_HEADER : %s", pseudoHeaders)
+		}
+
+		for i, header := range headers {
+			switch header {
+			case "m":
+				t.PseudoHeaderOrder[i] = ":method"
+			case "p":
+				t.PseudoHeaderOrder[i] = ":path"
+			case "s":
+				t.PseudoHeaderOrder[i] = ":scheme"
+			case "a":
+				t.PseudoHeaderOrder[i] = ":authority"
+			default:
+				return fmt.Errorf("invalid PSEUDO_HEADER : %s", header)
+			}
+		}
+	}
+
 	return nil
 }
 
