@@ -169,7 +169,7 @@ type Transport struct {
 	// transmission on that stream.“
 	Priorities []Priority
 
-	PseudoHeaderOrder [4]string
+	PseudoHeaderOrder []string
 }
 
 type Priority struct {
@@ -855,6 +855,7 @@ func (t *Transport) ApplyPriorities(priorities string) error {
 }
 
 func (t *Transport) ApplyPseudoHeaders(pseudoHeaders string) error {
+	t.PseudoHeaderOrder = []string{":method", ":authority", ":scheme", ":path"}
 	if pseudoHeaders != "0" {
 		headers := strings.Split(pseudoHeaders, ",")
 		if len(headers) != 4 {
