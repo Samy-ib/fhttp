@@ -149,9 +149,30 @@ type Transport struct {
 	// InitialWindowSize uint32 // if nil, will use global initialWindowSize
 	// HeaderTableSize   uint32 // if nil, will use global initialHeaderTableSize
 
-	//The WINDOW_UPDATE frame is sent in order to notify the other endpoint of an increment in the window size.
-	// It is defined by RFC 7540
+	// The WINDOW_UPDATE frame is sent in order to notify the other endpoint of an increment in the window size.
+	// It is defined by RFC 7540 as follows:
+	// “The WINDOW_UPDATE frame (type=0x8) is used to implement flow control; see Section 5.2 for an overview...
+	// When an HTTP/2 connection is first established, new streams are created with an initial flow-control window
+	// size of 65,535 octets. The connection flow-control window is also 65,535 octets. Both endpoints can adjust the
+	// initial window size for new streams by including a value for SETTINGS_INITIAL_WINDOW_SIZE in the SETTINGS
+	// frame that forms part of the connection preface. The connection flow-control window can only be changed
+	// using WINDOW_UPDATE frames.“
 	WindowUpdate uint32
+
+	// The PRIORITY frame is sent in order to set a priority of any given stream. It is defined by the RFC as follows:
+	// “The PRIORITY frame (type=0x2) specifies the sender-advised priority of a stream (Section 5.3). It can be sent in
+	// any stream state, including idle or closed streams.…The PRIORITY frame can be sent on a stream in any state,
+	// though it cannot be sent between consecutive frames that comprise a single header block (Section 4.3). Note
+	// that this frame could arrive after processing or frame sending has completed, which would cause it to have
+	// no effect on the identified stream. For a stream that is in the “half-closed (remote)” or “closed” state, this
+	// frame can only affect processing of the identified stream and its dependent streams; it does not affect frame
+	// transmission on that stream.“
+	Priorities []Priority
+}
+
+type Priority struct {
+	PriorityParam PriorityParam
+	StreamID      uint32
 }
 
 func (t *Transport) maxHeaderListSize() uint32 {
@@ -779,6 +800,12 @@ func (t *Transport) newClientConn(c net.Conn, addr string, singleUse bool) (*Cli
 	} else {
 		cc.fr.WriteWindowUpdate(0, t.WindowUpdate)
 	}
+
+	for _, priority := range t.Priorities {
+		cc.fr.WritePriority(priority.StreamID, priority.PriorityParam)
+		cc.nextStreamID = priority.StreamID + 2
+	}
+
 	cc.inflow.add(transportDefaultConnFlow + initialWindowSize)
 	cc.bw.Flush()
 	if cc.werr != nil {
