@@ -950,8 +950,7 @@ func (t *Transport) newClientConn(c net.Conn, addr string, singleUse bool) (*Cli
 			settingValue := t.Settings[settingId]
 			initialSettings = append(initialSettings, Setting{ID: settingId, Val: settingValue})
 		}
-	}
-	if _, ok := t.Settings[SettingEnablePush]; !ok {
+	} else if _, ok := t.Settings[SettingEnablePush]; !ok {
 		initialSettings = append(initialSettings, Setting{ID: SettingEnablePush, Val: pushEnabled})
 	}
 	if _, ok := t.Settings[SettingInitialWindowSize]; !ok {
