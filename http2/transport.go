@@ -168,6 +168,8 @@ type Transport struct {
 	// frame can only affect processing of the identified stream and its dependent streams; it does not affect frame
 	// transmission on that stream.“
 	Priorities []Priority
+
+	PseudoHeaderOrder []string
 }
 
 type Priority struct {
@@ -711,6 +713,11 @@ func (t *Transport) expectContinueTimeout() time.Duration {
 		return 0
 	}
 	return t.t1.ExpectContinueTimeout
+}
+
+// Applies akamai fimgerprints to the request
+func (t *Transport) ApplyFingerprints(fingerprints string) error {
+	return nil
 }
 
 func (t *Transport) NewClientConn(c net.Conn) (*ClientConn, error) {
@@ -1637,6 +1644,12 @@ func (cc *ClientConn) encodeHeaders(req *http.Request, addGzipHeader bool, trail
 		// [RFC3986]).
 
 		pHeaderOrder, ok := req.Header[http.PHeaderOrderKey]
+		if !ok {
+			pHeaderOrder = cc.t.PseudoHeaderOrder
+			if pHeaderOrder != nil {
+				ok = true
+			}
+		}
 		m := req.Method
 		if m == "" {
 			m = http.MethodGet
