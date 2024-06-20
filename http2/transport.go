@@ -148,6 +148,10 @@ type Transport struct {
 	SettingsOrder []SettingID
 	// InitialWindowSize uint32 // if nil, will use global initialWindowSize
 	// HeaderTableSize   uint32 // if nil, will use global initialHeaderTableSize
+
+	//The WINDOW_UPDATE frame is sent in order to notify the other endpoint of an increment in the window size.
+	// It is defined by RFC 7540
+	WindowUpdate uint32
 }
 
 func (t *Transport) maxHeaderListSize() uint32 {
@@ -770,7 +774,11 @@ func (t *Transport) newClientConn(c net.Conn, addr string, singleUse bool) (*Cli
 
 	cc.bw.Write(clientPreface)
 	cc.fr.WriteSettings(initialSettings...)
-	cc.fr.WriteWindowUpdate(0, transportDefaultConnFlow)
+	if t.WindowUpdate == 0 {
+		cc.fr.WriteWindowUpdate(0, transportDefaultConnFlow)
+	} else {
+		cc.fr.WriteWindowUpdate(0, t.WindowUpdate)
+	}
 	cc.inflow.add(transportDefaultConnFlow + initialWindowSize)
 	cc.bw.Flush()
 	if cc.werr != nil {
