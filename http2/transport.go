@@ -751,15 +751,14 @@ func (t *Transport) newClientConn(c net.Conn, addr string, singleUse bool) (*Cli
 	if t.PushHandler != nil {
 		pushEnabled = 1
 	}
-	initialSettings = append(initialSettings, Setting{ID: SettingEnablePush, Val: pushEnabled})
 
-	// setMaxHeader := false
 	if t.Settings != nil {
 		for _, settingId := range t.SettingsOrder {
 			settingValue := t.Settings[settingId]
 			initialSettings = append(initialSettings, Setting{ID: settingId, Val: settingValue})
 		}
-	} else {
+	}
+	if _, ok := t.Settings[SettingEnablePush]; !ok {
 		initialSettings = append(initialSettings, Setting{ID: SettingEnablePush, Val: pushEnabled})
 	}
 	if _, ok := t.Settings[SettingInitialWindowSize]; !ok {
