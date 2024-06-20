@@ -96,7 +96,7 @@ type Transport struct {
 	// want to advertise an unlimited value to the peer, Transport
 	// interprets the highest possible value here (0xffffffff or 1<<32-1)
 	// to mean no limit.
-	MaxHeaderListSize uint32
+	// MaxHeaderListSize uint32
 
 	// StrictMaxConcurrentStreams controls whether the server's
 	// SETTINGS_MAX_CONCURRENT_STREAMS should be respected
@@ -151,13 +151,17 @@ type Transport struct {
 }
 
 func (t *Transport) maxHeaderListSize() uint32 {
-	if t.MaxHeaderListSize == 0 {
+	maxHeaderListSize, ok := t.Settings[SettingMaxHeaderListSize]
+	if !ok {
+		maxHeaderListSize = 0
+	}
+	if maxHeaderListSize == 0 {
 		return 10 << 20
 	}
-	if t.MaxHeaderListSize == 0xffffffff {
+	if maxHeaderListSize == 0xffffffff {
 		return 0
 	}
-	return t.MaxHeaderListSize
+	return maxHeaderListSize
 }
 
 func (t *Transport) disableCompression() bool {
@@ -236,12 +240,16 @@ func configureTransports(t1 *http.Transport) (*Transport, error) {
 	//
 	// TODO: also add this to x/net/http2.Configure Transport, behind
 	// a +build go1.7 build tag:
-	if limit1 := t1.MaxResponseHeaderBytes; limit1 != 0 && t2.MaxHeaderListSize == 0 {
+	maxHeaderListSize, ok := t2.Settings[SettingMaxHeaderListSize]
+	if !ok {
+		return t2, nil
+	}
+	if limit1 := t1.MaxResponseHeaderBytes; limit1 != 0 && maxHeaderListSize == 0 {
 		const h2max = 1<<32 - 1
 		if limit1 >= h2max {
-			t2.MaxHeaderListSize = h2max
+			t2.Settings[SettingMaxHeaderListSize] = h2max
 		} else {
-			t2.MaxHeaderListSize = uint32(limit1)
+			t2.Settings[SettingMaxHeaderListSize] = uint32(limit1)
 		}
 	}
 	return t2, nil
@@ -716,11 +724,12 @@ func (t *Transport) newClientConn(c net.Conn, addr string, singleUse bool) (*Cli
 	cc.bw = bufio.NewWriter(stickyErrWriter{c, &cc.werr})
 	cc.br = bufio.NewReader(c)
 	cc.fr = NewFramer(cc.bw, cc.br)
-	// if t.HeaderTableSize != 0 {
-	// 	cc.fr.ReadMetaHeaders = hpack.NewDecoder(t.HeaderTableSize, nil)
-	// } else {
-	// 	cc.fr.ReadMetaHeaders = hpack.NewDecoder(initialHeaderTableSize, nil)
-	// }
+	headerTableSize, ok := t.Settings[SettingHeaderTableSize]
+	if ok {
+		cc.fr.ReadMetaHeaders = hpack.NewDecoder(headerTableSize, nil)
+	} else {
+		cc.fr.ReadMetaHeaders = hpack.NewDecoder(initialHeaderTableSize, nil)
+	}
 	cc.fr.MaxHeaderListSize = t.maxHeaderListSize()
 
 	// TODO: SetMaxDynamicTableSize, SetMaxDynamicTableSizeLimit on
@@ -752,6 +761,12 @@ func (t *Transport) newClientConn(c net.Conn, addr string, singleUse bool) (*Cli
 		}
 	} else {
 		initialSettings = append(initialSettings, Setting{ID: SettingEnablePush, Val: pushEnabled})
+	}
+	if _, ok := t.Settings[SettingInitialWindowSize]; !ok {
+		initialSettings = append(initialSettings, Setting{ID: SettingInitialWindowSize, Val: transportDefaultStreamFlow})
+	}
+	if _, ok := t.Settings[SettingHeaderTableSize]; !ok {
+		initialSettings = append(initialSettings, Setting{ID: SettingHeaderTableSize, Val: initialHeaderTableSize})
 	}
 
 	cc.bw.Write(clientPreface)
