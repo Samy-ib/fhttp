@@ -169,7 +169,7 @@ type Transport struct {
 	// transmission on that stream.“
 	Priorities []Priority
 
-	PseudoHeaderOrder []string
+	PseudoHeaderOrder [4]string
 }
 
 type Priority struct {
